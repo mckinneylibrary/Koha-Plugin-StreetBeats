@@ -15,19 +15,15 @@ sub new {
         date_authored   => '2026-05-13',
         date_updated    => '2026-05-13',
         minimum_version => '22.11',
-        version         => '1.1', # Incremented version
+        version         => '1.2', 
     };
     return $class->SUPER::new($args);
 }
 
-# -------------------------------------------------------------------------
-# STAFF INTERFACE: The Dashboard
-# -------------------------------------------------------------------------
 sub tool {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
     
-    # Permissions check: Superlibrarian or custom flag
     my $userenv = C4::Context->userenv;
     my $is_super = ($userenv && ($userenv->{flags} & 1));
     unless ( $is_super || $self->can_user_manage ) {
@@ -52,9 +48,6 @@ sub tool {
     print $template->output();
 }
 
-# -------------------------------------------------------------------------
-# PUBLIC API: Endpoint for Next.js / External Frontend
-# -------------------------------------------------------------------------
 sub public {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
@@ -67,7 +60,6 @@ sub public {
         my $time   = $cgi->param('start_time');
         my $bor_no = $cgi->param('borrowernumber');
 
-        # Validation logic
         if ( !$self->is_slot_available($loc_id, $time) ) {
             print encode_json({ status => 'error', message => 'Slot already taken' });
             return;
@@ -90,18 +82,22 @@ sub public {
     }
 }
 
-# -------------------------------------------------------------------------
-# CONFIGURATION: Plugin Settings
-# -------------------------------------------------------------------------
 sub configure {
     my ( $self, $args ) = @_;
+    my $cgi = $self->{'cgi'};
+    my $dbh = C4::Context->dbh;
+
+    # Logic to save a new location if the form is submitted
+    if ($cgi->param('loc_name')) {
+        my $name = $cgi->param('loc_name');
+        my $desc = $cgi->param('loc_desc');
+        $dbh->do("INSERT INTO streetbeats_locations (location_name, description) VALUES (?, ?)", undef, $name, $desc);
+    }
+
     my $template = $self->get_template({ file => 'streetbeats/configure.tt' });
     print $template->output();
 }
 
-# -------------------------------------------------------------------------
-# HELPER METHODS
-# -------------------------------------------------------------------------
 sub is_slot_available {
     my ( $self, $location_id, $start_time ) = @_;
     my $dbh = C4::Context->dbh;
@@ -113,18 +109,13 @@ sub is_slot_available {
 sub can_patron_perform {
     my ($self, $borrowernumber) = @_;
     my $patron = Koha::Patrons->find($borrowernumber);
-    # Check if patron exists and is not restricted/suspended
     return ($patron && !$patron->restricted) ? 1 : 0;
 }
 
-# -------------------------------------------------------------------------
-# LIFECYCLE: Install / Uninstall
-# -------------------------------------------------------------------------
 sub install {
     my ( $self, $args ) = @_;
     my $dbh = C4::Context->dbh;
 
-    # Table creation
     $dbh->do(q{
         CREATE TABLE IF NOT EXISTS streetbeats_locations (
             location_id INT(11) NOT NULL AUTO_INCREMENT,
@@ -146,7 +137,6 @@ sub install {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     });
 
-    # Permission registration
     $dbh->do(q{
         INSERT IGNORE INTO permissions (module_bit, code, description) 
         VALUES (19, 'manage_streetbeats', 'Access to manage StreetBeats musician bookings')
