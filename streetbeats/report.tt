@@ -1,33 +1,69 @@
 [% INCLUDE 'doc-head-open.inc' %]
 <title>StreetBeats Dashboard</title>
 [% INCLUDE 'doc-head-close.inc' %]
+<style>
+    /* Subtle nod to the modern aesthetic within Koha's framework */
+    .sb-neon-header {
+        border-left: 5px solid #00d4ff;
+        padding-left: 15px;
+        margin-bottom: 25px;
+        text-shadow: 1px 1px 2px rgba(0,212,255,0.2);
+    }
+    .sb-status-active { color: #28a745; font-weight: bold; }
+</style>
 </head>
-<body>
+<body id="plugins_streetbeats_report" class="plugins">
 [% INCLUDE 'header.inc' %]
 [% INCLUDE 'cat-search.inc' %]
 
-<div id="breadcrumbs"><a href="/cgi-bin/koha/mainpage.pl">Home</a> &rsaquo; <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a> &rsaquo; StreetBeats</div>
+<div id="breadcrumbs">
+    <a href="/cgi-bin/koha/mainpage.pl">Home</a> &rsaquo; 
+    <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a> &rsaquo; 
+    StreetBeats
+</div>
 
 <div class="main container-fluid">
-    <h1>StreetBeats Management</h1>
-    <table class="table table-bordered table-striped">
-        <thead>
-            <tr>
-                <th>Musician (Card #)</th>
-                <th>Location</th>
-                <th>Time Slot</th>
-            </tr>
-        </thead>
-        <tbody>
-            [% FOREACH slot IN slots %]
-            <tr>
-                <td>[% slot.cardnumber %]</td>
-                <td>[% slot.location_name %]</td>
-                <td>[% slot.start_time %]</td>
-            </tr>
-            [% END %]
-        </tbody>
-    </table>
+    <div class="row">
+        <div class="col-sm-12">
+            <h1 class="sb-neon-header">StreetBeats: Musician Booking Management</h1>
+            
+            <div class="page-section">
+                [% IF slots.size %]
+                <table id="streetbeats_table" class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>Performance Time</th>
+                            <th>Location</th>
+                            <th>Musician (Card #)</th>
+                            <th>Account Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        [% FOREACH slot IN slots %]
+                        <tr>
+                            <td>[% slot.start_time %]</td>
+                            <td>[% slot.location_name %]</td>
+                            <td>
+                                <strong>[% slot.firstname %] [% slot.surname %]</strong> 
+                                ([% slot.cardnumber %])
+                            </td>
+                            <td><span class="sb-status-active">Active</span></td>
+                            <td>
+                                <a href="#" class="btn btn-default btn-xs" onclick="alert('Module expansion: Details coming soon')">
+                                    <i class="fa fa-eye"></i> View Patron
+                                </a>
+                            </td>
+                        </tr>
+                        [% END %]
+                    </tbody>
+                </table>
+                [% ELSE %]
+                <div class="dialog message">No upcoming bookings found.</div>
+                [% END %]
+            </div>
+        </div>
+    </div>
 </div>
 
 [% INCLUDE 'intranet-bottom.inc' %]
