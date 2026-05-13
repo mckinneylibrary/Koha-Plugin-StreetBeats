@@ -1,1 +1,33 @@
+[% INCLUDE 'doc-head-open.inc' %]
+<title>StreetBeats Dashboard</title>
+[% INCLUDE 'doc-head-close.inc' %]
+</head>
+<body>
+[% INCLUDE 'header.inc' %]
+[% INCLUDE 'cat-search.inc' %]
 
+<div id="breadcrumbs"><a href="/cgi-bin/koha/mainpage.pl">Home</a> &rsaquo; <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a> &rsaquo; StreetBeats</div>
+
+<div class="main container-fluid">
+    <h1>StreetBeats Management</h1>
+    <table class="table table-bordered table-striped">
+        <thead>
+            <tr>
+                <th>Musician (Card #)</th>
+                <th>Location</th>
+                <th>Time Slot</th>
+            </tr>
+        </thead>
+        <tbody>
+            [% FOREACH slot IN slots %]
+            <tr>
+                <td>[% slot.cardnumber %]</td>
+                <td>[% slot.location_name %]</td>
+                <td>[% slot.start_time %]</td>
+            </tr>
+            [% END %]
+        </tbody>
+    </table>
+</div>
+
+[% INCLUDE 'intranet-bottom.inc' %]
