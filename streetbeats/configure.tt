@@ -1,1 +1,45 @@
+[% INCLUDE 'doc-head-open.inc' %]
+<title>StreetBeats Configuration</title>
+[% INCLUDE 'doc-head-close.inc' %]
+</head>
+<body id="plugins_streetbeats_configure" class="plugins">
+[% INCLUDE 'header.inc' %]
 
+<div id="breadcrumbs">
+    <a href="/cgi-bin/koha/mainpage.pl">Home</a> &rsaquo; 
+    <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a> &rsaquo; 
+    StreetBeats &rsaquo; Configuration
+</div>
+
+<div class="main container-fluid">
+    <div class="row">
+        <div class="col-sm-6">
+            <h1>StreetBeats Settings</h1>
+            <form method="get" class="validated">
+                <input type="hidden" name="class" value="[% CLASS %]"/>
+                <input type="hidden" name="method" value="configure"/>
+                
+                <fieldset class="rows">
+                    <legend>Add New Performance Location</legend>
+                    <ol>
+                        <li>
+                            <label for="loc_name" class="required">Location Name:</label>
+                            <input type="text" name="loc_name" id="loc_name" required="required" placeholder="e.g., North Entryway" />
+                        </li>
+                        <li>
+                            <label for="loc_desc">Description:</label>
+                            <textarea name="loc_desc" id="loc_desc" rows="3"></textarea>
+                        </li>
+                    </ol>
+                </fieldset>
+                
+                <fieldset class="action">
+                    <input type="submit" class="btn btn-primary" value="Save Location" />
+                    <a class="cancel" href="/cgi-bin/koha/plugins/plugins-home.pl">Cancel</a>
+                </fieldset>
+            </form>
+        </div>
+    </div>
+</div>
+
+[% INCLUDE 'intranet-bottom.inc' %]
