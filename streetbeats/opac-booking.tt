@@ -4,15 +4,58 @@
         <div class="row">
             <div class="col-lg-12">
                 <div id="userstreetbeats" class="maincontent">
-                    <h1>StreetBeats: Musician Booking</h1>
+                    <h1>StreetBeats: Musician Portal</h1>
 
                     [% IF status == 'success' %]
-                        <div class="alert alert-success">Booking confirmed! We look forward to your performance.</div>
+                        <div class="alert alert-success">Action confirmed! Your profile or booking has been updated.</div>
                     [% ELSIF status == 'error' %]
                         <div class="alert alert-danger">Error: [% message %]</div>
                     [% END %]
 
                     [% IF logged_in_user %]
+                        <!-- SECTION 1: ARTIST PROFILE MANAGER -->
+                        <div class="page-section" style="background: #fdfdfd; padding: 20px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 30px;">
+                            <h3>Your Artist Profile</h3>
+                            <p class="text-muted">This information is public. It allows the community to find you, tip you, and follow your work.</p>
+                            
+                            <form action="/cgi-bin/koha/opac-plugins.pl" method="post">
+                                <input type="hidden" name="plugins_class" value="Koha::Plugin::Com::McKinney::StreetBeats"/>
+                                <input type="hidden" name="plugins_method" value="opac"/>
+                                <input type="hidden" name="action" value="update_profile"/>
+
+                                <div class="form-group">
+                                    <label for="bio">Artist/Band Bio:</label>
+                                    <textarea name="bio" id="bio" class="form-control" rows="3" placeholder="Tell the community about your music...">[% profile.bio %]</textarea>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="tip_link">Digital Tip Jar (Venmo/CashApp URL):</label>
+                                            <input type="url" name="tip_link" id="tip_link" class="form-control" value="[% profile.tip_link %]" placeholder="https://venmo.com/your-id" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="social_link">Primary Social Media Link:</label>
+                                            <input type="url" name="social_link" id="social_link" class="form-control" value="[% profile.social_link %]" placeholder="https://instagram.com/your-band" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="image_url">Headshot or Band Logo (Image URL):</label>
+                                    <input type="url" name="image_url" id="image_url" class="form-control" value="[% profile.image_url %]" placeholder="Link to a hosted image (e.g., from your website or Dropbox)" />
+                                    <small class="form-text text-muted">Provide a direct link to an image file (JPG, PNG).</small>
+                                </div>
+
+                                <button type="submit" class="btn btn-info">Update Artist Profile</button>
+                            </form>
+                        </div>
+
+                        <hr />
+
+                        <!-- SECTION 2: BOOKING INTERFACE -->
                         <div class="page-section">
                             <h3>Book a New Performance Slot</h3>
                             <form action="/cgi-bin/koha/opac-plugins.pl" method="post">
@@ -20,27 +63,33 @@
                                 <input type="hidden" name="plugins_method" value="opac"/>
                                 <input type="hidden" name="action" value="book"/>
 
-                                <div class="form-group">
-                                    <label for="location_id">Select Location:</label>
-                                    <select name="location_id" id="location_id" class="form-control" required>
-                                        <option value="">-- Choose a Stage --</option>
-                                        [% FOREACH loc IN locations %]
-                                            <option value="[% loc.location_id %]">[% loc.location_name %]</option>
-                                        [% END %]
-                                    </select>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="location_id">Stage/Location:</label>
+                                            <select name="location_id" id="location_id" class="form-control" required>
+                                                <option value="">-- Choose a Stage --</option>
+                                                [% FOREACH loc IN locations %]
+                                                    <option value="[% loc.location_id %]">[% loc.location_name %]</option>
+                                                [% END %]
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="start_time">Date & Time:</label>
+                                            <input type="datetime-local" name="start_time" id="start_time" class="form-control" required />
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div class="form-group">
-                                    <label for="start_time">Select Date & Time:</label>
-                                    <input type="datetime-local" name="start_time" id="start_time" class="form-control" required />
-                                </div>
-
-                                <button type="submit" class="btn btn-primary">Confirm Booking</button>
+                                <button type="submit" class="btn btn-primary">Secure This Gig</button>
                             </form>
                         </div>
 
                         <hr />
 
+                        <!-- SECTION 3: UPCOMING GIGS -->
                         <div class="page-section">
                             <h3>Your Upcoming Performances</h3>
                             [% IF my_slots.size %]
@@ -61,12 +110,13 @@
                                     </tbody>
                                 </table>
                             [% ELSE %]
-                                <p>You don't have any bookings scheduled yet.</p>
+                                <p>You haven't booked any gigs yet.</p>
                             [% END %]
                         </div>
+
                     [% ELSE %]
-                        <div class="alert alert-info">
-                            Please <a href="/cgi-bin/koha/opac-user.pl">log in with your Library Card</a> to book a performance slot.
+                        <div class="alert alert-warning">
+                            Please <a href="/cgi-bin/koha/opac-user.pl">log in</a> with your library card to manage your profile and book performances.
                         </div>
                     [% END %]
                 </div>
