@@ -11,84 +11,93 @@ sub new {
     $args->{'metadata'} = {
         name            => 'StreetBeats Integration',
         author          => 'McKinney Public Library System',
-        description     => 'Full musician profiles including logos, social media, and digital tip jars.',
+        description     => 'Musician booking with advanced staff analytics and artist profiles.',
         date_authored   => '2026-05-13',
         date_updated    => '2026-05-13',
         minimum_version => '22.11',
-        version         => '1.5', 
+        version         => '1.6', 
     };
     return $class->SUPER::new($args);
 }
 
+# -------------------------------------------------------------------------
+# STAFF DASHBOARD: Performance Analytics
+# -------------------------------------------------------------------------
+sub tool {
+    my ( $self, $args ) = @_;
+    my $cgi = $self->{'cgi'};
+    my $dbh = C4::Context->dbh;
+
+    # 1. PERMISSIONS
+    my $userenv = C4::Context->userenv;
+    unless ( ($userenv && ($userenv->{flags} & 1)) || $self->can_user_manage ) {
+        print $cgi->redirect("/cgi-bin/koha/mainpage.pl");
+        exit;
+    }
+
+    # 2. CALCULATE SUMMARY STATS
+    my $stats = {};
+    $stats->{total_active}     = $dbh->selectrow_array("SELECT COUNT(*) FROM streetbeats_slots WHERE start_time >= NOW()");
+    $stats->{unique_musicians} = $dbh->selectrow_array("SELECT COUNT(DISTINCT borrowernumber) FROM streetbeats_slots");
+    $stats->{top_location}     = $dbh->selectrow_array("SELECT l.location_name FROM streetbeats_slots s JOIN streetbeats_locations l ON s.location_id = l.location_id GROUP BY s.location_id ORDER BY COUNT(*) DESC LIMIT 1") || "None";
+    $stats->{avg_per_week}     = $dbh->selectrow_array("SELECT COUNT(*) FROM streetbeats_slots WHERE start_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
+
+    # 3. GET DETAILED BOOKINGS
+    my $query = "
+        SELECT s.*, l.location_name, b.cardnumber, b.firstname, b.surname, b.borrowernumber,
+               (SELECT COUNT(*) FROM streetbeats_profiles p WHERE p.borrowernumber = b.borrowernumber) as has_profile
+        FROM streetbeats_slots s
+        JOIN streetbeats_locations l ON s.location_id = l.location_id
+        JOIN borrowers b ON s.borrowernumber = b.borrowernumber
+        ORDER BY s.start_time DESC
+    ";
+    my $slots = $dbh->selectall_arrayref($query, { Slice => {} });
+
+    my $template = $self->get_template({ file => 'streetbeats/report.tt' });
+    $template->param( slots => $slots, stats => $stats );
+    print $template->output();
+}
+
+# -------------------------------------------------------------------------
+# PUBLIC & OPAC METHODS (Stable from v1.5)
+# -------------------------------------------------------------------------
 sub opac {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
     my $dbh = C4::Context->dbh;
     my $template = $self->get_template({ file => 'streetbeats/opac-booking.tt' });
-
     my $userenv = C4::Context->userenv;
     my $borrowernumber = $userenv ? $userenv->{number} : undef;
 
     if ($borrowernumber) {
         if ($cgi->param('action') eq 'update_profile') {
-            my $bio    = $cgi->param('bio');
-            my $tip    = $cgi->param('tip_link');
-            my $social = $cgi->param('social_link');
-            my $img    = $cgi->param('image_url');
-            
-            $dbh->do("
-                INSERT INTO streetbeats_profiles (borrowernumber, bio, tip_link, social_link, image_url) 
-                VALUES (?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE bio = ?, tip_link = ?, social_link = ?, image_url = ?",
-                undef, $borrowernumber, $bio, $tip, $social, $img, $bio, $tip, $social, $img
-            );
+            $dbh->do("INSERT INTO streetbeats_profiles (borrowernumber, bio, tip_link, social_link, image_url) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE bio = ?, tip_link = ?, social_link = ?, image_url = ?", undef, $borrowernumber, $cgi->param('bio'), $cgi->param('tip_link'), $cgi->param('social_link'), $cgi->param('image_url'), $cgi->param('bio'), $cgi->param('tip_link'), $cgi->param('social_link'), $cgi->param('image_url'));
         }
-
         if ($cgi->param('action') eq 'book') {
-            my $loc_id = $cgi->param('location_id');
-            my $time   = $cgi->param('start_time');
-            $time =~ s/T/ /; $time .= ":00";
-
-            if ( $self->is_slot_available($loc_id, $time) && $self->can_patron_perform($borrowernumber) ) {
-                $dbh->do("INSERT INTO streetbeats_slots (borrowernumber, location_id, start_time) VALUES (?, ?, ?)", undef, $borrowernumber, $loc_id, $time);
+            my $time = $cgi->param('start_time'); $time =~ s/T/ /; $time .= ":00";
+            if ( $self->is_slot_available($cgi->param('location_id'), $time) && $self->can_patron_perform($borrowernumber) ) {
+                $dbh->do("INSERT INTO streetbeats_slots (borrowernumber, location_id, start_time) VALUES (?, ?, ?)", undef, $borrowernumber, $cgi->param('location_id'), $time);
                 $template->param( status => 'success' );
             }
         }
     }
 
-    my $profile = $dbh->selectrow_hashref("SELECT * FROM streetbeats_profiles WHERE borrowernumber = ?", undef, $borrowernumber);
-    my $locations = $dbh->selectall_arrayref("SELECT * FROM streetbeats_locations", { Slice => {} });
-    my $my_slots = $dbh->selectall_arrayref("SELECT s.start_time, l.location_name FROM streetbeats_slots s JOIN streetbeats_locations l ON s.location_id = l.location_id WHERE s.borrowernumber = ?", { Slice => {} }, $borrowernumber);
-
     $template->param(
-        profile        => $profile,
-        locations      => $locations,
-        my_slots       => $my_slots,
+        profile   => $dbh->selectrow_hashref("SELECT * FROM streetbeats_profiles WHERE borrowernumber = ?", undef, $borrowernumber),
+        locations => $dbh->selectall_arrayref("SELECT * FROM streetbeats_locations", { Slice => {} }),
+        my_slots  => $dbh->selectall_arrayref("SELECT s.start_time, l.location_name FROM streetbeats_slots s JOIN streetbeats_locations l ON s.location_id = l.location_id WHERE s.borrowernumber = ?", { Slice => {} }, $borrowernumber),
         logged_in_user => $borrowernumber,
     );
-
-    print $cgi->header( -charset => 'utf-8' );
-    print $template->output();
+    print $cgi->header( -charset => 'utf-8' ); print $template->output();
 }
 
 sub public_list {
     my ( $self, $args ) = @_;
-    my $cgi = $self->{'cgi'};
     my $dbh = C4::Context->dbh;
     my $query = "SELECT s.start_time, l.location_name, b.firstname, p.bio, p.tip_link, p.social_link, p.image_url FROM streetbeats_slots s JOIN streetbeats_locations l ON s.location_id = l.location_id JOIN borrowers b ON s.borrowernumber = b.borrowernumber LEFT JOIN streetbeats_profiles p ON b.borrowernumber = p.borrowernumber WHERE s.start_time >= NOW() ORDER BY s.start_time ASC";
-    my $performances = $dbh->selectall_arrayref($query, { Slice => {} });
     my $template = $self->get_template({ file => 'streetbeats/public-schedule.tt' });
-    $template->param( performances => $performances );
-    print $cgi->header( -charset => 'utf-8' );
-    print $template->output();
-}
-
-sub tool {
-    my ( $self, $args ) = @_;
-    my $slots = C4::Context->dbh->selectall_arrayref("SELECT s.start_time, l.location_name, b.cardnumber, b.firstname, b.surname FROM streetbeats_slots s JOIN streetbeats_locations l ON s.location_id = l.location_id JOIN borrowers b ON s.borrowernumber = b.borrowernumber ORDER BY s.start_time DESC", { Slice => {} });
-    my $template = $self->get_template({ file => 'streetbeats/report.tt' });
-    $template->param( slots => $slots );
-    print $template->output();
+    $template->param( performances => $dbh->selectall_arrayref($query, { Slice => {} }) );
+    print $cgi->header( -charset => 'utf-8' ); print $template->output();
 }
 
 sub configure {
