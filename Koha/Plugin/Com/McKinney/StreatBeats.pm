@@ -20,36 +20,6 @@ sub new {
     return $class->SUPER::new($args);
 }
 
-# -------------------------------------------------------------------------
-# PUBLIC DISCOVERY: The Community View
-# -------------------------------------------------------------------------
-sub public_list {
-    my ( $self, $args ) = @_;
-    my $cgi = $self->{'cgi'};
-    my $dbh = C4::Context->dbh;
-
-    my $query = "
-        SELECT s.start_time, l.location_name, b.firstname, 
-               p.bio, p.tip_link, p.social_link, p.image_url
-        FROM streetbeats_slots s
-        JOIN streetbeats_locations l ON s.location_id = l.location_id
-        JOIN borrowers b ON s.borrowernumber = b.borrowernumber
-        LEFT JOIN streetbeats_profiles p ON b.borrowernumber = p.borrowernumber
-        WHERE s.start_time >= NOW()
-        ORDER BY s.start_time ASC
-    ";
-    my $performances = $dbh->selectall_arrayref($query, { Slice => {} });
-
-    my $template = $self->get_template({ file => 'streetbeats/public-schedule.tt' });
-    $template->param( performances => $performances );
-    
-    print $cgi->header( -charset => 'utf-8' );
-    print $template->output();
-}
-
-# -------------------------------------------------------------------------
-# OPAC INTERFACE: Profile & Image Management
-# -------------------------------------------------------------------------
 sub opac {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
@@ -60,7 +30,6 @@ sub opac {
     my $borrowernumber = $userenv ? $userenv->{number} : undef;
 
     if ($borrowernumber) {
-        # Update Profile (Tips, Bio, Social, Image)
         if ($cgi->param('action') eq 'update_profile') {
             my $bio    = $cgi->param('bio');
             my $tip    = $cgi->param('tip_link');
@@ -75,7 +44,6 @@ sub opac {
             );
         }
 
-        # Booking Logic
         if ($cgi->param('action') eq 'book') {
             my $loc_id = $cgi->param('location_id');
             my $time   = $cgi->param('start_time');
@@ -103,9 +71,18 @@ sub opac {
     print $template->output();
 }
 
-# -------------------------------------------------------------------------
-# STAFF & HELPERS
-# -------------------------------------------------------------------------
+sub public_list {
+    my ( $self, $args ) = @_;
+    my $cgi = $self->{'cgi'};
+    my $dbh = C4::Context->dbh;
+    my $query = "SELECT s.start_time, l.location_name, b.firstname, p.bio, p.tip_link, p.social_link, p.image_url FROM streetbeats_slots s JOIN streetbeats_locations l ON s.location_id = l.location_id JOIN borrowers b ON s.borrowernumber = b.borrowernumber LEFT JOIN streetbeats_profiles p ON b.borrowernumber = p.borrowernumber WHERE s.start_time >= NOW() ORDER BY s.start_time ASC";
+    my $performances = $dbh->selectall_arrayref($query, { Slice => {} });
+    my $template = $self->get_template({ file => 'streetbeats/public-schedule.tt' });
+    $template->param( performances => $performances );
+    print $cgi->header( -charset => 'utf-8' );
+    print $template->output();
+}
+
 sub tool {
     my ( $self, $args ) = @_;
     my $slots = C4::Context->dbh->selectall_arrayref("SELECT s.start_time, l.location_name, b.cardnumber, b.firstname, b.surname FROM streetbeats_slots s JOIN streetbeats_locations l ON s.location_id = l.location_id JOIN borrowers b ON s.borrowernumber = b.borrowernumber ORDER BY s.start_time DESC", { Slice => {} });
@@ -134,46 +111,12 @@ sub can_patron_perform {
     return ($patron && !$patron->restricted) ? 1 : 0;
 }
 
-# -------------------------------------------------------------------------
-# LIFECYCLE
-# -------------------------------------------------------------------------
 sub install {
     my ( $self, $args ) = @_;
     my $dbh = C4::Context->dbh;
-
-    $dbh->do(q{
-        CREATE TABLE IF NOT EXISTS streetbeats_locations (
-            location_id INT(11) NOT NULL AUTO_INCREMENT,
-            location_name VARCHAR(255) NOT NULL,
-            description TEXT,
-            PRIMARY KEY (location_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    });
-
-    $dbh->do(q{
-        CREATE TABLE IF NOT EXISTS streetbeats_profiles (
-            borrowernumber INT(11) NOT NULL,
-            bio TEXT,
-            tip_link VARCHAR(255),
-            social_link VARCHAR(255),
-            image_url VARCHAR(255),
-            PRIMARY KEY (borrowernumber),
-            CONSTRAINT fk_sb_profile_patron FOREIGN KEY (borrowernumber) REFERENCES borrowers (borrowernumber) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    });
-
-    $dbh->do(q{
-        CREATE TABLE IF NOT EXISTS streetbeats_slots (
-            slot_id INT(11) NOT NULL AUTO_INCREMENT,
-            borrowernumber INT(11) NOT NULL,
-            location_id INT(11) NOT NULL,
-            start_time DATETIME NOT NULL,
-            PRIMARY KEY (slot_id),
-            CONSTRAINT fk_sb_patron FOREIGN KEY (borrowernumber) REFERENCES borrowers (borrowernumber) ON DELETE CASCADE,
-            CONSTRAINT fk_sb_location FOREIGN KEY (location_id) REFERENCES streetbeats_locations (location_id) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    });
-
+    $dbh->do(q{CREATE TABLE IF NOT EXISTS streetbeats_locations (location_id INT(11) NOT NULL AUTO_INCREMENT, location_name VARCHAR(255) NOT NULL, description TEXT, PRIMARY KEY (location_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;});
+    $dbh->do(q{CREATE TABLE IF NOT EXISTS streetbeats_profiles (borrowernumber INT(11) NOT NULL, bio TEXT, tip_link VARCHAR(255), social_link VARCHAR(255), image_url VARCHAR(255), PRIMARY KEY (borrowernumber), CONSTRAINT fk_sb_profile_patron FOREIGN KEY (borrowernumber) REFERENCES borrowers (borrowernumber) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;});
+    $dbh->do(q{CREATE TABLE IF NOT EXISTS streetbeats_slots (slot_id INT(11) NOT NULL AUTO_INCREMENT, borrowernumber INT(11) NOT NULL, location_id INT(11) NOT NULL, start_time DATETIME NOT NULL, PRIMARY KEY (slot_id), CONSTRAINT fk_sb_patron FOREIGN KEY (borrowernumber) REFERENCES borrowers (borrowernumber) ON DELETE CASCADE, CONSTRAINT fk_sb_location FOREIGN KEY (location_id) REFERENCES streetbeats_locations (location_id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;});
     $dbh->do(q{INSERT IGNORE INTO permissions (module_bit, code, description) VALUES (19, 'manage_streetbeats', 'Access to manage StreetBeats musician bookings')});
     return 1;
 }
