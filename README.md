@@ -1,55 +1,45 @@
-🎵 StreetBeats: Centralized Municipal Booking for Koha ILS
-StreetBeats is a native Koha plugin designed for the McKinney Public Library System. It transforms the library's ILS into a centralized municipal utility, allowing local musicians to book performance slots using their existing library credentials.
+This updated README.md reflects the evolution of StreetBeats from a logistics tool into a comprehensive artist platform. It is designed to be visually engaging and clearly communicate the project's value to both technical contributors and municipal stakeholders.
 
-🚀 Overview
-By migrating from a standalone architecture to a native Koha module, StreetBeats leverages existing database infrastructure and authentication layers to reduce friction for both staff and the public.
+🎵 StreetBeats: The Municipal Artist Platform for Koha ILS
+StreetBeats is an advanced Koha plugin that transforms the library’s Integrated Library System into a centralized municipal utility for local talent. By leveraging the library’s native MariaDB architecture, StreetBeats provides musicians with a "digital stage" to book gigs, manage their professional profiles, and accept digital tips from the community.  
 
-Seamless Identity: Musicians log in with their Library Card Number.
+✨ Key Features
+🎸 For Musicians (The Artist Portal)
+Seamless Identity: Instant access using existing Library Card credentials.  
 
-Data Ownership: Full control over booking data within the library's MariaDB instance.
+Digital Stage Presence: Curate a public profile with an artist bio, social media links, and a band logo/headshot.  
 
-Operational Efficiency: Integrated staff dashboard for monitoring and venue management.
+Monetization: Integrated digital tip jar support (Venmo, CashApp, PayPal).  
 
-🛠 Tech Stack
-Backend: Perl (Koha Plugin Framework)
+Self-Service Booking: Real-time visibility into available performance slots across the city.  
 
-Database: MariaDB (Native Koha tables)
+🏟 For the Community (Public Discovery)
+"What’s Playing Now": A public-facing schedule featuring artist profiles and live performance locations.  
 
-Frontend: Template Toolkit (TT2) & Bootstrap
+Support Local Talent: Direct links to musician tip jars and social portfolios from the discovery page.  
 
-Integration: Supports JSON-based API calls for hybrid Next.js frontends.
+🏛 For Staff (Administrative Excellence)
+Analytics Dashboard: A "Quick Look" ribbon providing instant stats on active gigs, unique artists, and venue popularity.  
 
-📦 Installation & Deployment
-Since this project is managed via GitHub, follow these steps to package and install the plugin:
+Venue Management: Dynamic configuration of physical stages and performance constraints.  
 
-Download Source: Download this repository as a .zip file.
+Data Integrity: Automated cleanup—if a patron account is deleted, associated gigs are purged to maintain database hygiene.  
 
-Prepare Package: Rename the extension from .zip to .kpz.
+🛠 Technical Architecture
+StreetBeats is built with a focus on Data Ownership and Process Automation.  
 
-Ensure the Koha and streetbeats folders are at the root level of the archive.
+Database: Extends the Koha MariaDB instance with three custom tables (locations, profiles, slots) natively linked to core library records via borrowernumber.  
 
-Upload to Koha:
+Backend: Perl (Koha Plugin Framework) utilizing Koha::Patrons for secure authentication.  
 
-Go to Koha Administration > Plugins > Upload Plugin.
+Frontend: Template Toolkit (TT2) for a native "McKinney" aesthetic within the Staff and OPAC interfaces.  
 
-Select your .kpz file and click Install.
+📦 Installation
+Package: Download this repository as a ZIP and rename the extension to .kpz.
 
-Configure: Navigate to the plugin configuration to define your performance venues.
+Upload: In Koha, navigate to Administration > Plugins > Upload Plugin.
 
-📋 Operational Workflows
-🏛 Staff (Administration)
-Permissions: Grant the manage_streetbeats flag to authorized staff members.
-
-Venue Creation: Use the Configure menu to add performance locations (e.g., "Memorial Fountain").
-
-Monitoring: Use the Run Tool dashboard to audit upcoming bookings and verify patron standings.
-
-🎸 Public (Musicians)
-Authentication: Musicians log into the OPAC using their Library Card and PIN.
-
-Booking: Select an available stage and time slot via the public StreetBeats portal.
-
-Verification: Bookings are instantly validated against slot availability and account standing.
+Permissions: Grant the manage_streetbeats flag to authorized staff accounts.  
 
 📂 Project Structure
 Plaintext
@@ -58,14 +48,15 @@ Koha-Plugin-StreetBeats/
 │   └── Plugin/
 │       └── Com/
 │           └── McKinney/
-│               └── StreetBeats.pm       # Main Logic & API Endpoints
+│               └── StreetBeats.pm       # Main Logic, Analytics & API
 ├── streetbeats/
-│   ├── configure.tt                     # Staff Configuration UI
-│   ├── report.tt                        # Staff Dashboard UI
-│   └── opac-booking.tt                  # Public Booking UI
+│   ├── configure.tt                     # Venue Configuration UI
+│   ├── report.tt                        # Staff Analytics Dashboard
+│   ├── opac-booking.tt                  # Artist Profile & Booking UI
+│   └── public-schedule.tt               # Community Discovery Page
 └── README.md                            # You are here
+🚀 Municipal Impact
+Developed to align with Professional Excellence in public service, StreetBeats serves as a model for how open-source library software can drive broader community innovation and economic support for the arts.  
+
 🛡 License
 This project is licensed under the same terms as Koha itself (GPL-3.0 or later).
-
-🏙 Municipal Utility
-Developed for the McKinney Public Library System to drive innovation and process automation in municipal government.
