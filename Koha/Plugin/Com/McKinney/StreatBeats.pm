@@ -11,17 +11,44 @@ sub new {
     $args->{'metadata'} = {
         name            => 'StreetBeats Integration',
         author          => 'McKinney Public Library System',
-        description     => 'Centralized municipal musician booking utilizing Koha patron authentication.',
+        description     => 'Full musician profiles including logos, social media, and digital tip jars.',
         date_authored   => '2026-05-13',
         date_updated    => '2026-05-13',
         minimum_version => '22.11',
-        version         => '1.3', 
+        version         => '1.5', 
     };
     return $class->SUPER::new($args);
 }
 
 # -------------------------------------------------------------------------
-# OPAC INTERFACE: Public Booking Page
+# PUBLIC DISCOVERY: The Community View
+# -------------------------------------------------------------------------
+sub public_list {
+    my ( $self, $args ) = @_;
+    my $cgi = $self->{'cgi'};
+    my $dbh = C4::Context->dbh;
+
+    my $query = "
+        SELECT s.start_time, l.location_name, b.firstname, 
+               p.bio, p.tip_link, p.social_link, p.image_url
+        FROM streetbeats_slots s
+        JOIN streetbeats_locations l ON s.location_id = l.location_id
+        JOIN borrowers b ON s.borrowernumber = b.borrowernumber
+        LEFT JOIN streetbeats_profiles p ON b.borrowernumber = p.borrowernumber
+        WHERE s.start_time >= NOW()
+        ORDER BY s.start_time ASC
+    ";
+    my $performances = $dbh->selectall_arrayref($query, { Slice => {} });
+
+    my $template = $self->get_template({ file => 'streetbeats/public-schedule.tt' });
+    $template->param( performances => $performances );
+    
+    print $cgi->header( -charset => 'utf-8' );
+    print $template->output();
+}
+
+# -------------------------------------------------------------------------
+# OPAC INTERFACE: Profile & Image Management
 # -------------------------------------------------------------------------
 sub opac {
     my ( $self, $args ) = @_;
@@ -29,43 +56,44 @@ sub opac {
     my $dbh = C4::Context->dbh;
     my $template = $self->get_template({ file => 'streetbeats/opac-booking.tt' });
 
-    # Identify the logged-in patron
     my $userenv = C4::Context->userenv;
     my $borrowernumber = $userenv ? $userenv->{number} : undef;
 
-    # Handle Form Submission
-    if ($cgi->param('action') eq 'book' && $borrowernumber) {
-        my $loc_id = $cgi->param('location_id');
-        my $time   = $cgi->param('start_time');
-        
-        # Format HTML5 datetime-local (YYYY-MM-DDTHH:MM) to MariaDB (YYYY-MM-DD HH:MM:00)
-        $time =~ s/T/ /;
-        $time .= ":00";
+    if ($borrowernumber) {
+        # Update Profile (Tips, Bio, Social, Image)
+        if ($cgi->param('action') eq 'update_profile') {
+            my $bio    = $cgi->param('bio');
+            my $tip    = $cgi->param('tip_link');
+            my $social = $cgi->param('social_link');
+            my $img    = $cgi->param('image_url');
+            
+            $dbh->do("
+                INSERT INTO streetbeats_profiles (borrowernumber, bio, tip_link, social_link, image_url) 
+                VALUES (?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE bio = ?, tip_link = ?, social_link = ?, image_url = ?",
+                undef, $borrowernumber, $bio, $tip, $social, $img, $bio, $tip, $social, $img
+            );
+        }
 
-        if ( $self->is_slot_available($loc_id, $time) && $self->can_patron_perform($borrowernumber) ) {
-            my $insert = "INSERT INTO streetbeats_slots (borrowernumber, location_id, start_time) VALUES (?, ?, ?)";
-            $dbh->do($insert, undef, $borrowernumber, $loc_id, $time);
-            $template->param( status => 'success' );
-        } else {
-            $template->param( status => 'error', message => 'Slot unavailable or account restricted.' );
+        # Booking Logic
+        if ($cgi->param('action') eq 'book') {
+            my $loc_id = $cgi->param('location_id');
+            my $time   = $cgi->param('start_time');
+            $time =~ s/T/ /; $time .= ":00";
+
+            if ( $self->is_slot_available($loc_id, $time) && $self->can_patron_perform($borrowernumber) ) {
+                $dbh->do("INSERT INTO streetbeats_slots (borrowernumber, location_id, start_time) VALUES (?, ?, ?)", undef, $borrowernumber, $loc_id, $time);
+                $template->param( status => 'success' );
+            }
         }
     }
 
-    # Fetch Data for Display
+    my $profile = $dbh->selectrow_hashref("SELECT * FROM streetbeats_profiles WHERE borrowernumber = ?", undef, $borrowernumber);
     my $locations = $dbh->selectall_arrayref("SELECT * FROM streetbeats_locations", { Slice => {} });
-    
-    my $my_slots = [];
-    if ($borrowernumber) {
-        $my_slots = $dbh->selectall_arrayref("
-            SELECT s.start_time, l.location_name 
-            FROM streetbeats_slots s 
-            JOIN streetbeats_locations l ON s.location_id = l.location_id 
-            WHERE s.borrowernumber = ? 
-            ORDER BY s.start_time ASC", 
-        { Slice => {} }, $borrowernumber);
-    }
+    my $my_slots = $dbh->selectall_arrayref("SELECT s.start_time, l.location_name FROM streetbeats_slots s JOIN streetbeats_locations l ON s.location_id = l.location_id WHERE s.borrowernumber = ?", { Slice => {} }, $borrowernumber);
 
     $template->param(
+        profile        => $profile,
         locations      => $locations,
         my_slots       => $my_slots,
         logged_in_user => $borrowernumber,
@@ -76,74 +104,22 @@ sub opac {
 }
 
 # -------------------------------------------------------------------------
-# STAFF INTERFACE: The Dashboard
+# STAFF & HELPERS
 # -------------------------------------------------------------------------
 sub tool {
     my ( $self, $args ) = @_;
-    my $cgi = $self->{'cgi'};
-    
-    my $userenv = C4::Context->userenv;
-    my $is_super = ($userenv && ($userenv->{flags} & 1));
-    unless ( $is_super || $self->can_user_manage ) {
-        print $cgi->redirect("/cgi-bin/koha/mainpage.pl");
-        exit;
-    }
-
-    my $dbh = C4::Context->dbh;
-    my $query = "
-        SELECT s.start_time, l.location_name, b.cardnumber, b.firstname, b.surname
-        FROM streetbeats_slots s
-        JOIN streetbeats_locations l ON s.location_id = l.location_id
-        JOIN borrowers b ON s.borrowernumber = b.borrowernumber
-        ORDER BY s.start_time DESC
-    ";
-    my $slots = $dbh->selectall_arrayref($query, { Slice => {} });
-
+    my $slots = C4::Context->dbh->selectall_arrayref("SELECT s.start_time, l.location_name, b.cardnumber, b.firstname, b.surname FROM streetbeats_slots s JOIN streetbeats_locations l ON s.location_id = l.location_id JOIN borrowers b ON s.borrowernumber = b.borrowernumber ORDER BY s.start_time DESC", { Slice => {} });
     my $template = $self->get_template({ file => 'streetbeats/report.tt' });
     $template->param( slots => $slots );
     print $template->output();
 }
 
-# -------------------------------------------------------------------------
-# PUBLIC API: Endpoint for Hybrid Frontend
-# -------------------------------------------------------------------------
-sub public {
-    my ( $self, $args ) = @_;
-    my $cgi = $self->{'cgi'};
-    my $action = $cgi->param('action') || '';
-    
-    print $cgi->header('-type' => 'application/json', '-charset' => 'utf-8');
-
-    if ($action eq 'book_slot') {
-        my $loc_id = $cgi->param('location_id');
-        my $time   = $cgi->param('start_time');
-        my $bor_no = $cgi->param('borrowernumber');
-
-        if ( !$self->is_slot_available($loc_id, $time) || !$self->can_patron_perform($bor_no) ) {
-            print encode_json({ status => 'error', message => 'Validation failed' });
-            return;
-        }
-
-        my $dbh = C4::Context->dbh;
-        $dbh->do("INSERT INTO streetbeats_slots (borrowernumber, location_id, start_time) VALUES (?, ?, ?)", undef, $bor_no, $loc_id, $time);
-        print encode_json({ status => 'success' });
-    }
-}
-
-# -------------------------------------------------------------------------
-# CONFIGURATION & HELPERS
-# -------------------------------------------------------------------------
 sub configure {
     my ( $self, $args ) = @_;
-    my $cgi = $self->{'cgi'};
-    my $dbh = C4::Context->dbh;
-
-    if ($cgi->param('loc_name')) {
-        $dbh->do("INSERT INTO streetbeats_locations (location_name, description) VALUES (?, ?)", undef, $cgi->param('loc_name'), $cgi->param('loc_desc'));
+    if ($self->{'cgi'}->param('loc_name')) {
+        C4::Context->dbh->do("INSERT INTO streetbeats_locations (location_name, description) VALUES (?, ?)", undef, $self->{'cgi'}->param('loc_name'), $self->{'cgi'}->param('loc_desc'));
     }
-
-    my $template = $self->get_template({ file => 'streetbeats/configure.tt' });
-    print $template->output();
+    print $self->get_template({ file => 'streetbeats/configure.tt' })->output();
 }
 
 sub is_slot_available {
@@ -171,6 +147,18 @@ sub install {
             location_name VARCHAR(255) NOT NULL,
             description TEXT,
             PRIMARY KEY (location_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    });
+
+    $dbh->do(q{
+        CREATE TABLE IF NOT EXISTS streetbeats_profiles (
+            borrowernumber INT(11) NOT NULL,
+            bio TEXT,
+            tip_link VARCHAR(255),
+            social_link VARCHAR(255),
+            image_url VARCHAR(255),
+            PRIMARY KEY (borrowernumber),
+            CONSTRAINT fk_sb_profile_patron FOREIGN KEY (borrowernumber) REFERENCES borrowers (borrowernumber) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     });
 
