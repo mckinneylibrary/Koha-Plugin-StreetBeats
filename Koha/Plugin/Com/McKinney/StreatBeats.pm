@@ -14,8 +14,8 @@ sub new {
         description     => 'Musician booking with advanced staff analytics and artist profiles.',
         date_authored   => '2026-05-13',
         date_updated    => '2026-05-13',
-        minimum_version => '22.11',
-        version         => '1.6', 
+        minimum_version => '20.11',
+        version         => '1.7', 
     };
     return $class->SUPER::new($args);
 }
