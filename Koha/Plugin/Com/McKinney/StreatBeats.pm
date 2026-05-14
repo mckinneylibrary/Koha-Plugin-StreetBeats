@@ -13,36 +13,31 @@ sub new {
         author          => 'McKinney Public Library System',
         description     => 'Musician booking with advanced staff analytics and artist profiles.',
         date_authored   => '2026-05-13',
-        date_updated    => '2026-05-13',
+        date_updated    => '2026-05-14',
         minimum_version => '20.11',
-        version         => '1.7', 
+        version         => '1.7.1', 
     };
     return $class->SUPER::new($args);
 }
 
-# -------------------------------------------------------------------------
-# STAFF DASHBOARD: Performance Analytics
-# -------------------------------------------------------------------------
 sub tool {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
     my $dbh = C4::Context->dbh;
 
-    # 1. PERMISSIONS
     my $userenv = C4::Context->userenv;
-    unless ( ($userenv && ($userenv->{flags} & 1)) || $self->can_user_manage ) {
+    # Corrected to use the standard 'can_be_managed' method
+    unless ( ($userenv && ($userenv->{flags} & 1)) || $self->can_be_managed ) {
         print $cgi->redirect("/cgi-bin/koha/mainpage.pl");
         exit;
     }
 
-    # 2. CALCULATE SUMMARY STATS
     my $stats = {};
     $stats->{total_active}     = $dbh->selectrow_array("SELECT COUNT(*) FROM streetbeats_slots WHERE start_time >= NOW()");
     $stats->{unique_musicians} = $dbh->selectrow_array("SELECT COUNT(DISTINCT borrowernumber) FROM streetbeats_slots");
     $stats->{top_location}     = $dbh->selectrow_array("SELECT l.location_name FROM streetbeats_slots s JOIN streetbeats_locations l ON s.location_id = l.location_id GROUP BY s.location_id ORDER BY COUNT(*) DESC LIMIT 1") || "None";
     $stats->{avg_per_week}     = $dbh->selectrow_array("SELECT COUNT(*) FROM streetbeats_slots WHERE start_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
 
-    # 3. GET DETAILED BOOKINGS
     my $query = "
         SELECT s.*, l.location_name, b.cardnumber, b.firstname, b.surname, b.borrowernumber,
                (SELECT COUNT(*) FROM streetbeats_profiles p WHERE p.borrowernumber = b.borrowernumber) as has_profile
@@ -58,9 +53,6 @@ sub tool {
     print $template->output();
 }
 
-# -------------------------------------------------------------------------
-# PUBLIC & OPAC METHODS (Stable from v1.5)
-# -------------------------------------------------------------------------
 sub opac {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
