@@ -1,0 +1,23 @@
+name: Package Koha Plugin
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # Allows you to run it manually
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create KPZ Bundle
+        # This skips the root repo folder and zips only what Koha needs
+        run: zip -r Koha-Plugin-StreetBeats.kpz Koha streetbeats
+
+      - name: Upload Plugin Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StreetBeats-Plugin
+          path: Koha-Plugin-StreetBeats.kpz
